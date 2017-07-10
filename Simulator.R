@@ -1,8 +1,8 @@
-library(tidyverse)
-library(gganimate)
+#library(tidyverse)
+#library(gganimate)
 
 NUMPLAYERS = 5
-ROUNDS = 2
+ROUNDS = 100
 INITWEALTH = 5
 
 #initialize the bank
@@ -11,27 +11,64 @@ INITWEALTH = 5
 bank = matrix(0, nrow = ROUNDS, ncol = NUMPLAYERS)
 bank[1,] =  c(rep(INITWEALTH, NUMPLAYERS))
 
+# That's the max amount of money that can be lent in an entire simulation
+money_lender = NUMPLAYERS*ROUNDS
+
+# money in circulation
+init_money = money_lender + NUMPLAYERS*INITWEALTH
+
+# store how much each player has borrowed from the atm
+loans = matrix(0, nrow = ROUNDS, ncol = NUMPLAYERS)
+loans[1, ] = c(rep(0, NUMPLAYERS))
+
 #function to give a dollar to someone other than oneself
 get_recipient = function(player) {
-  sample(setdiff(1:NUMPLAYERS, player), 1)}
+  sample(setdiff(1:NUMPLAYERS, player), 1)
+}
 
 #execute trades and update the ledger 
-for (i in 2:ROUNDS) {
-  #every player with wealth chooses another person to receive a buck
-  recipients = sapply(which(bank[i - 1,] > 0), get_recipient)
-  print (recipients)
+for (i in 2:ROUNDS) 
+{
+  #every player chooses another person to receive a buck
+  recipients = sapply(bank[i - 1,], get_recipient)
   
   #table of the dollars owed each person
   count_table = table(recipients)
   
-  #get the indices of the people owed money
+  # get the indices of the people owed money
   indices = as.integer(names(count_table))
+
+  # borrow money if you're at or below 0
+  loans[i, ] = ifelse(bank[i-1,] <= 0, loans[i-1,] + 1, loans[i-1,])
+  bank[i, ] = ifelse(bank[i-1,] <= 0, bank[i-1,] + 1, bank[i-1,])
   
-  #everyone gives up a dollar, unless they are at zero
-  bank[i,] = ifelse(bank[i - 1,] > 0, bank[i - 1,] - 1, bank[i - 1,])
+  # everyone gives up a dollar
+  bank[i, ] = bank[i, ] - 1
   
-  #selected people receive dollars
+  # take the change out of the atm
+  money_lender = money_lender - sum(loans[i,]-loans[i-1,])
+  
+  # selected people receive dollars
   bank[i, indices] = bank[i, indices] + count_table
+  
+  # if your bank balance is high enough, return the loan
+  #ifelse( (loans[i,] != 0) && (bank[i,] >= 2*loans[i,]), {bank[i,] = bank[i,] - loans[i,];money_lender = money_lender + loans[i,]; loans[i,]=0}, "Do Nothing Here")
+  
+  for(x in 1:NUMPLAYERS)
+  {
+    flip = ((loans[i,x] >= 2) && (bank[i,x] > 2))
+    if (flip)
+    {
+      print("Someone just returned a loan")
+      bank[i,x] = bank[i,x] - 2
+      money_lender = money_lender + 2
+      loans[i,x] = loans[i,x] - 2
+    }
+  }
+  
+  
+  # Ensure that amount of money in simulation doesn't change
+  stopifnot(money_lender + sum(bank[i,]) == init_money)
 }
 
 ####################Animate it
